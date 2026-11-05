@@ -201,6 +201,7 @@ input,select,textarea{border-radius:10px}
       <button data-v="diario">Diário</button>
       <button data-v="socios">Sócios</button>
       <button data-v="quotas">Quotas</button>
+      <button data-v="avisos">Avisos</button>
       <button data-v="recibos">Recibos</button>
       <button data-v="relatorios">Relatórios</button>
       <button data-v="config">Dados</button>
@@ -252,6 +253,19 @@ input,select,textarea{border-radius:10px}
       <div class="wrap"><table id="tabQ"></table></div>
     </section>
 
+    <!-- AVISOS -->
+    <section id="v-avisos" hidden>
+      <div class="bar">
+        <div><label>Mostrar</label><select id="fAvModo"><option value="atraso">Quotas em atraso</option><option value="pendente">Todas as quotas por pagar</option></select></div>
+        <div class="grow"><label>Procurar sócio</label><input id="fAvTxt"></div>
+        <button class="btn" id="bAvCsv">Exportar CSV</button>
+        <button class="btn" id="bAvPrint">Imprimir lista</button>
+      </div>
+      <div class="cards" id="cardsAv"></div>
+      <p class="muted" style="margin:0 0 10px">«Gmail» abre uma mensagem já escrita no seu Gmail, só tem de carregar em Enviar. «E-mail» usa o programa de correio do computador. O texto da mensagem edita-se em <b>Dados</b>.</p>
+      <div class="wrap"><table id="tabAv"></table></div>
+    </section>
+
     <!-- RECIBOS -->
     <section id="v-recibos" hidden>
       <div class="bar">
@@ -294,6 +308,11 @@ input,select,textarea{border-radius:10px}
             <div><label>Tesoureiro(a)</label><input name="tesoureiro"></div>
             <div><label>Género do cargo de tesoureiro</label><select name="tesoureiro_genero"><option value="">—</option><option value="M">Masculino</option><option value="F">Feminino</option></select></div>
             <div><label>Prefixo dos recibos</label><input name="prefixo_recibo" maxlength="5"></div>
+            <div class="full"><h3 style="margin:10px 0 0;font-size:15px">Mensagens de aviso por e-mail</h3><p class="muted" style="margin:2px 0 0">Pode usar: {nome} {numero} {quotas} {total} {banda} {pagamento}</p></div>
+            <div class="full"><label>Assunto — quotas em atraso</label><input name="assunto_atraso"></div>
+            <div class="full"><label>Texto — quotas em atraso</label><textarea name="corpo_atraso" rows="9"></textarea></div>
+            <div class="full"><label>Assunto — quotas por pagar</label><input name="assunto_pendente"></div>
+            <div class="full"><label>Texto — quotas por pagar</label><textarea name="corpo_pendente" rows="9"></textarea></div>
           </div>
           <div class="acts"><button class="btn pri">Guardar dados da banda</button></div>
         </form>
@@ -659,7 +678,7 @@ function dividaDe(idSocio) {
 }
 
 /* ============ NAVEGAÇÃO ============ */
-const VISTAS = { diario: desenharDiario, socios: desenharSocios, quotas: desenharQuotas, recibos: desenharRecibos, relatorios: desenharRelatorios, config: desenharConfig };
+const VISTAS = { diario: desenharDiario, socios: desenharSocios, quotas: desenharQuotas, avisos: desenharAvisos, recibos: desenharRecibos, relatorios: desenharRelatorios, config: desenharConfig };
 function ir(v) {
   S.view = v;
   $$("nav button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
@@ -1137,6 +1156,75 @@ fAv.addEventListener("submit", async e => {
   if ($("#dSocio").open) desenharQuotasSocio();
 });
 
+/* ============ AVISOS (quotas em atraso / por pagar) ============ */
+const MSG_PADRAO = {
+  atraso: { assunto: "Quotas em atraso - {banda}",
+    corpo: "Caro(a) sócio(a) {nome},\n\nVerificámos que tem as seguintes quotas em atraso:\n\n{quotas}\n\nTotal em dívida: {total}\n\nAgradecemos a regularização {pagamento}. Caso já tenha efetuado o pagamento, queira desconsiderar esta mensagem.\n\nCom os melhores cumprimentos,\n{banda}" },
+  pendente: { assunto: "Quotas para pagamento - {banda}",
+    corpo: "Caro(a) sócio(a) {nome},\n\nInformamos que já se encontram emitidas as seguintes quotas:\n\n{quotas}\n\nTotal a pagar: {total}\n\nO pagamento pode ser feito {pagamento}.\n\nObrigado pelo seu apoio à banda.\n\nCom os melhores cumprimentos,\n{banda}" }
+};
+function textoMsg(modo, parte) {
+  const v = (S.cfg || {})[parte + "_" + modo];
+  return v && String(v).trim() ? v : MSG_PADRAO[modo][parte];
+}
+function textoPagamento() {
+  const ib = S.contas.slice(1).map(c => c.iban).find(Boolean);
+  return ib ? `por transferência bancária para o IBAN ${ib}, ou em numerário junto da direção` : "junto da direção";
+}
+const avisados = new Set();
+function devedoresAv() {
+  const modo = $("#fAvModo").value, t = $("#fAvTxt").value.trim().toLowerCase(), m = new Map();
+  S.quotas.filter(q => q.estado === "Pendente" && (modo === "pendente" || emAtraso(q))).forEach(q => {
+    if (!m.has(q.id_socio)) m.set(q.id_socio, []); m.get(q.id_socio).push(q);
+  });
+  return [...m.entries()].map(([id, qs]) => {
+    const s = S.socios.find(x => x.id === id); qs.sort((a, b) => (a.vencimento || "").localeCompare(b.vencimento || ""));
+    return { s, qs, total: qs.reduce((a, q) => a + Number(q.valor || 0), 0), desde: qs[0].vencimento };
+  }).filter(d => d.s && d.s.estado === "Ativo" && (!t || (d.s.nome || "").toLowerCase().includes(t)))
+    .sort((a, b) => (a.s.nome || "").localeCompare(b.s.nome || "", "pt"));
+}
+function mensagemAv(d) {
+  const modo = $("#fAvModo").value;
+  const pre = t => t.replace(/\{nome\}/g, d.s.nome).replace(/\{numero\}/g, d.s.num_socio ?? "")
+    .replace(/\{quotas\}/g, d.qs.map(q => `- ${q.descricao}${q.vencimento ? " (vencimento " + dpt(q.vencimento) + ")" : ""}: ${eur(q.valor)}`).join("\n"))
+    .replace(/\{total\}/g, eur(d.total)).replace(/\{banda\}/g, S.cfg.nome_banda || "").replace(/\{pagamento\}/g, textoPagamento());
+  return { assunto: pre(textoMsg(modo, "assunto")), corpo: pre(textoMsg(modo, "corpo")) };
+}
+function desenharAvisos() {
+  const ds = devedoresAv(), tot = ds.reduce((a, d) => a + d.total, 0), sem = ds.filter(d => !d.s.email).length;
+  $("#cardsAv").innerHTML = `<div class="card"><div class="k">Sócios com quotas ${$("#fAvModo").value === "atraso" ? "em atraso" : "por pagar"}</div><div class="v">${ds.length}</div></div>
+    <div class="card"><div class="k">Total</div><div class="v warn">${eur(tot)}</div></div>
+    <div class="card"><div class="k">Sem e-mail registado</div><div class="v">${sem}</div></div>`;
+  const cab = `<thead><tr><th>N.º</th><th>Sócio</th><th>E-mail</th><th>Telefone</th><th class="n">Quotas</th><th class="n">Total</th><th>Desde</th><th></th></tr></thead>`;
+  if (!ds.length) { $("#tabAv").innerHTML = cab + `<tbody><tr><td colspan="8" class="empty">Nenhum sócio nesta situação. 🎉</td></tr></tbody>`; return; }
+  $("#tabAv").innerHTML = cab + "<tbody>" + ds.map(d => `<tr><td>${esc(d.s.num_socio ?? "")}</td><td>${esc(d.s.nome)}</td>
+    <td>${d.s.email ? esc(d.s.email) : '<span class="tag bad">sem e-mail</span>'}</td><td>${esc(d.s.telefone || "")}</td>
+    <td class="n">${d.qs.length}</td><td class="n">${eur(d.total)}</td><td>${dpt(d.desde)}</td>
+    <td style="white-space:nowrap;text-align:right">${avisados.has(d.s.id) ? '<span class="tag ok">preparado</span> ' : ""}
+      ${d.s.email ? `<button class="btn sm pri" data-av="gmail:${d.s.id}">Gmail</button> <button class="btn sm" data-av="mailto:${d.s.id}">E-mail</button> ` : ""}
+      <button class="btn sm" data-av="copiar:${d.s.id}">Copiar texto</button></td></tr>`).join("") + "</tbody>";
+}
+["fAvModo"].forEach(i => $("#" + i).addEventListener("change", desenharAvisos)); $("#fAvTxt").addEventListener("input", desenharAvisos);
+$("#tabAv").addEventListener("click", async e => {
+  const b = e.target.closest("[data-av]"); if (!b) return;
+  const [acao, id] = b.dataset.av.split(":"), d = devedoresAv().find(x => x.s.id === Number(id)); if (!d) return;
+  const m = mensagemAv(d), enc = encodeURIComponent;
+  if (acao === "gmail") window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${enc(d.s.email)}&su=${enc(m.assunto)}&body=${enc(m.corpo)}`, "_blank", "noopener");
+  else if (acao === "mailto") location.href = `mailto:${d.s.email}?subject=${enc(m.assunto)}&body=${enc(m.corpo)}`;
+  else { try { await navigator.clipboard.writeText(m.assunto + "\n\n" + m.corpo); toast("Texto copiado."); } catch (er) { toast("Não foi possível copiar."); } return; }
+  avisados.add(d.s.id); desenharAvisos();
+});
+$("#bAvCsv").addEventListener("click", () => csv(`quotas_${$("#fAvModo").value}_${hoje()}.csv`,
+  ["N.º sócio", "Nome", "E-mail", "Telefone", "N.º quotas", "Total", "Desde"],
+  devedoresAv().map(d => [d.s.num_socio, d.s.nome, d.s.email, d.s.telefone, d.qs.length, String(d.total.toFixed(2)).replace(".", ","), dpt(d.desde)])));
+$("#bAvPrint").addEventListener("click", () => {
+  const ds = devedoresAv(), tot = ds.reduce((a, d) => a + d.total, 0), atraso = $("#fAvModo").value === "atraso";
+  imprimir(`<div class="cab"><h1>${esc(S.cfg.nome_banda || "")}</h1>${atraso ? "Sócios com quotas em atraso" : "Sócios com quotas por pagar"} — ${dpt(hoje())}</div>
+    <table class="dm"><thead><tr><th>N.º</th><th>Sócio</th><th>Contacto</th><th class="n">Quotas</th><th class="n">Total</th><th>Desde</th></tr></thead><tbody>
+    ${ds.map(d => `<tr><td>${esc(d.s.num_socio ?? "")}</td><td>${esc(d.s.nome)}</td><td>${esc([d.s.telefone, d.s.email].filter(Boolean).join(" · "))}</td><td class="n">${d.qs.length}</td><td class="n">${numPT(d.total)} €</td><td>${dpt(d.desde)}</td></tr>`).join("")}</tbody>
+    <tfoot><tr><td colspan="4">Total (${ds.length} sócios)</td><td class="n">${numPT(tot)} €</td><td></td></tr></tfoot></table>`);
+});
+
 /* ============ RECIBOS ============ */
 function filtradosR() {
   const ano = $("#fRAno").value, t = $("#fRTxt").value.trim().toLowerCase();
@@ -1215,6 +1303,8 @@ const CHAVE_S = { conta: "contas", categoria_socio: "catsSocio", categoria_mov: 
 function desenharConfig() {
   const f = $("#fCfg").elements, c = S.cfg || {};
   ["nome_banda","nif","telefone","morada","cod_postal","localidade","email","presidente","presidente_genero","tesoureiro","tesoureiro_genero","prefixo_recibo"].forEach(k => f[k].value = c[k] || "");
+  f.assunto_atraso.value = textoMsg("atraso", "assunto"); f.corpo_atraso.value = textoMsg("atraso", "corpo");
+  f.assunto_pendente.value = textoMsg("pendente", "assunto"); f.corpo_pendente.value = textoMsg("pendente", "corpo");
   $("#listasCfg").innerHTML = LISTAS.map((L, i) => {
     const rows = [...S[CHAVE_S[L.t]]].sort((a, b) => L.ord ? L.ord(a).localeCompare(L.ord(b)) : 0);
     return `<div class="sec"><div class="head"><h3>${esc(L.titulo)}</h3><button class="btn sm pri" data-add="${i}">+ Adicionar</button></div>
@@ -1227,7 +1317,7 @@ function desenharConfig() {
 $("#fCfg").addEventListener("submit", async e => {
   e.preventDefault();
   const f = $("#fCfg").elements, p = {};
-  ["nome_banda","nif","telefone","morada","cod_postal","localidade","email","presidente","presidente_genero","tesoureiro","tesoureiro_genero","prefixo_recibo"].forEach(k => p[k] = nul(f[k].value.trim()));
+  ["nome_banda","nif","telefone","morada","cod_postal","localidade","email","presidente","presidente_genero","tesoureiro","tesoureiro_genero","prefixo_recibo","assunto_atraso","corpo_atraso","assunto_pendente","corpo_pendente"].forEach(k => p[k] = nul(f[k].value.trim()));
   const r = await sb.from("config").update(p).eq("id", 1);
   if (r.error) { toast("Erro: " + erroPT(r.error)); return; }
   toast("Dados da banda guardados."); await carregar();

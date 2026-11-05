@@ -156,6 +156,7 @@ dialog h2{margin:0 0 14px;font-size:18px}
   body:not(.printing) header.top,body:not(.printing) .bar,body:not(.printing) .acoes,body:not(.printing) .cards{display:none!important}
   body{background:#fff;color:#000} .wrap{border:0;overflow:visible} table{min-width:0;font-size:11px}
 }
+.muted{color:var(--mut,#666);font-size:13px}
 </style>
 </head>
 <body>
@@ -188,6 +189,7 @@ dialog h2{margin:0 0 14px;font-size:18px}
     <button class="btn sm" id="bSair">Sair</button>
   </header>
   <main>
+    <div id="avisoBackup" hidden style="cursor:pointer;background:#fff4d6;border:1px solid #e0c36a;color:#5a4500;padding:8px 12px;border-radius:8px;margin-bottom:12px;font-size:13px">⚠ Já passou um mês (ou ainda não fez) cópia de segurança. Clique aqui para a fazer.</div>
     <!-- DIÁRIO -->
     <section id="v-diario" hidden>
       <div class="bar">
@@ -275,6 +277,11 @@ dialog h2{margin:0 0 14px;font-size:18px}
           </div>
           <div class="acts"><button class="btn pri">Guardar dados da banda</button></div>
         </form>
+      </div>
+      <div class="sec" id="secBackup">
+        <h3>Cópia de segurança para o Access</h3>
+        <p class="muted" style="margin:0 0 10px">Descarrega um ficheiro <b>.zip</b> com todos os dados. Depois, num PC com o Access, corra o instalador <b>Importar_Backup.vbs</b> na pasta do <b>Gestao_Banda.accdb</b>: ele substitui os dados do Access por esta cópia (e guarda antes uma cópia de segurança do ficheiro).</p>
+        <div class="acts" style="justify-content:flex-start"><button class="btn pri" id="bExpAccess">Exportar para Access (.zip)</button> <span class="muted" id="ultBackup"></span></div>
       </div>
       <div id="listasCfg"></div>
     </section>
@@ -465,6 +472,7 @@ dialog h2{margin:0 0 14px;font-size:18px}
 
 <div id="printArea"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
 <script>
 "use strict";
@@ -1308,6 +1316,53 @@ function diarioMensalHTML(ano, mes) {
     </div>
     <div class="dmfoot">${esc(c.nome_banda || "")} - ${dpt(hoje())}</div>`;
 }
+
+/* ---- Cópia de segurança (zip de ficheiros TSV para importar no Access) ---- */
+const BK_TABELAS = [
+  { t: "tblConfig", src: "config", c: [["IdConfig","id","N"],["NomeBanda","nome_banda","T"],["NIF","nif","T"],["Morada","morada","T"],["CodPostal","cod_postal","T"],["Localidade","localidade","T"],["Telefone","telefone","T"],["Email","email","T"],["Presidente","presidente","T"],["Tesoureiro","tesoureiro","T"],["PrefixoRecibo","prefixo_recibo","T"],["AssuntoAtraso","assunto_atraso","T"],["CorpoAtraso","corpo_atraso","M"],["AssuntoPendente","assunto_pendente","T"],["CorpoPendente","corpo_pendente","M"],["TesoureiroGenero","tesoureiro_genero","T"],["PresidenteGenero","presidente_genero","T"]] },
+  { t: "tblCategoriaSocio", src: "categoria_socio", c: [["IdCatSocio","id","N"],["Nome","nome","T"],["ValorQuota","valor_quota","C"],["Periodicidade","periodicidade","T"]] },
+  { t: "tblConta", src: "conta", c: [["IdConta","id","N"],["Nome","nome","T"],["SaldoInicial","saldo_inicial","C"],["Iban","iban","T"]] },
+  { t: "tblCategoriaMov", src: "categoria_mov", c: [["IdCatMov","id","N"],["Nome","nome","T"],["Tipo","tipo","T"]] },
+  { t: "tblMeioPagamento", src: "meio_pagamento", c: [["IdMeio","id","N"],["Nome","nome","T"]] },
+  { t: "tblSocio", src: "socio", c: [["IdSocio","id","N"],["NumSocio","num_socio","N"],["Nome","nome","T"],["NIF","nif","T"],["DataNasc","data_nasc","D"],["Telefone","telefone","T"],["Email","email","T"],["Morada","morada","T"],["CodPostal","cod_postal","T"],["Localidade","localidade","T"],["DataAdmissao","data_admissao","D"],["IdCatSocio","id_cat_socio","N"],["Musico","musico","B"],["Instrumento","instrumento","T"],["Estado","estado","T"],["DataSaida","data_saida","D"],["RGPD","rgpd","B"],["QuotaPersonalizada","quota_personalizada","C"],["Notas","notas","M"],["Foto","foto","T"]] },
+  { t: "tblRecibo", src: "recibo", c: [["IdRecibo","id","N"],["NumRecibo","num_recibo","T"],["Ano","ano","N"],["Seq","seq","N"],["DataRecibo","data_recibo","D"],["IdSocio","id_socio","N"],["Total","total","C"],["IdMeio","id_meio","N"],["IdConta","id_conta","N"],["IdMov","id_mov","N"],["Observacoes","observacoes","T"]] },
+  { t: "tblMovimento", src: "movimento", c: [["IdMov","id","N"],["Ano","ano","N"],["Seq","seq","N"],["NumLanc","num_lanc","T"],["DataMov","data_mov","D"],["Tipo","tipo","T"],["IdCatMov","id_cat_mov","N"],["Descricao","descricao","T"],["Valor","valor","C"],["IdConta","id_conta","N"],["IdMeio","id_meio","N"],["Terceiro","terceiro","T"],["Documento","documento","T"],["IdSocio","id_socio","N"],["IdRecibo","id_recibo","N"],["IdTransf","id_transf","N"],["Motivo","motivo","T"],["Atuacao","atuacao","T"],["Notas","notas","M"]] },
+  { t: "tblQuota", src: "quota", c: [["IdQuota","id","N"],["IdSocio","id_socio","N"],["Ano","ano","N"],["Periodo","periodo","T"],["Descricao","descricao","T"],["Valor","valor","C"],["Vencimento","vencimento","D"],["Estado","estado","T"],["DataPagamento","data_pagamento","D"],["IdRecibo","id_recibo","N"]] },
+  { t: "tblDemoCfg", src: "demo_cfg", c: [["Tipo","tipo","T"],["Chave","chave","T"],["Modo","modo","T"],["CabAntes","cab_antes","T"]] }
+];
+const tsvCel = v => v == null ? "" : String(typeof v === "boolean" ? (v ? 1 : 0) : v).replace(/\\/g, "\\\\").replace(/\t/g, "\\t").replace(/\r/g, "").replace(/\n/g, "\\n");
+async function exportarAccess() {
+  const btn = $("#bExpAccess"); btn.disabled = true; btn.textContent = "A preparar…";
+  try {
+    if (typeof JSZip === "undefined") throw new Error("Não foi possível carregar o componente de compressão. Verifique a ligação à internet e atualize a página.");
+    const zip = new JSZip(), meta = ["tabela\tcoluna\ttipo"], resumo = [];
+    for (const T of BK_TABELAS) {
+      const rows = await lerTudo(T.src, T.src === "demo_cfg" || T.src === "config" ? ["id"] : ["id"]);
+      T.c.forEach(c => meta.push(`${T.t}\t${c[0]}\t${c[2]}`));
+      zip.file(T.t + ".tsv", [T.c.map(c => c[0]).join("\t")].concat(rows.map(r => T.c.map(c => tsvCel(r[c[1]])).join("\t"))).join("\r\n") + "\r\n");
+      resumo.push(`${T.t}: ${rows.length}`);
+    }
+    zip.file("_colunas.tsv", meta.join("\r\n") + "\r\n");
+    zip.file("_info.txt", `Cópia criada em ${new Date().toLocaleString("pt-PT")}\r\n` + resumo.join("\r\n") + "\r\n");
+    const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+    const d = new Date(), z = n => String(n).padStart(2, "0");
+    const nome = `Backup_Banda_${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}.zip`;
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = nome; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    try { localStorage.setItem("ultBackup", String(Date.now())); } catch (e) {}
+    mostrarUltBackup(); toast("Cópia descarregada: " + nome);
+  } catch (e) { toast("Erro na exportação: " + (e.message || e)); }
+  btn.disabled = false; btn.textContent = "Exportar para Access (.zip)";
+}
+function diasDesdeBackup() { try { const t = Number(localStorage.getItem("ultBackup")); return t ? Math.floor((Date.now() - t) / 864e5) : null; } catch (e) { return null; } }
+function mostrarUltBackup() {
+  const d = diasDesdeBackup(), el = $("#ultBackup");
+  if (el) el.textContent = d == null ? "Ainda não foi feita nenhuma cópia neste navegador." : d === 0 ? "Última cópia: hoje." : `Última cópia: há ${d} dia(s).`;
+  const av = $("#avisoBackup"); if (av) av.hidden = !(d == null || d >= 30);
+}
+$("#bExpAccess").addEventListener("click", exportarAccess);
+$("#avisoBackup").addEventListener("click", () => ir("config"));
+mostrarUltBackup();
 
 /* ---- Demonstração de resultados (só as rubricas que tiveram movimentos no ano) ---- */
 const cfgDA = (tp, chave, campo) => { const r = S.demoCfg.find(x => x.tipo === tp && x.chave === chave); return r ? (r[campo] || "") : ""; };

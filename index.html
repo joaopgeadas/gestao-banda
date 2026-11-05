@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gestão da Banda</title>
+<style>
+:root{
+  --bg:#f5f6f8; --card:#fff; --tx:#1c2430; --mut:#6b7686; --bd:#dfe3e9;
+  --pri:#1f4e8c; --pri-tx:#fff; --ok:#1d7a46; --bad:#b3261e; --row:#f0f4fa;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#14181f; --card:#1d232c; --tx:#e6eaf0; --mut:#93a0b2; --bd:#2f3744;
+         --pri:#5b9be0; --pri-tx:#0e1620; --ok:#5bc58a; --bad:#f08a82; --row:#232b36; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+[hidden]{display:none!important}
+button,input,select,textarea{font:inherit;color:inherit}
+input,select,textarea{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--pri);outline-offset:-1px}
+label{display:block;font-size:13px;color:var(--mut);margin-bottom:4px}
+.btn{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px 14px;cursor:pointer}
+.btn:hover{border-color:var(--pri)}
+.btn.pri{background:var(--pri);color:var(--pri-tx);border-color:var(--pri)}
+.btn.bad{color:var(--bad)}
+.btn.sm{padding:4px 9px;font-size:13px}
+
+#login{min-height:100vh;display:grid;place-items:center;padding:16px}
+.box{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:28px;width:100%;max-width:380px}
+.box h1{margin:0 0 4px;font-size:22px}
+.box p{margin:0 0 18px;color:var(--mut)}
+.box .f{margin-bottom:12px}
+.err{color:var(--bad);font-size:14px;min-height:20px;margin:6px 0}
+
+header.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;background:var(--card);border-bottom:1px solid var(--bd)}
+header.top h1{font-size:18px;margin:0;flex:1}
+main{padding:16px;max-width:1500px;margin:0 auto}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:14px}
+.bar > div{min-width:110px}
+.bar .grow{flex:1}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px 14px}
+.card .k{font-size:13px;color:var(--mut)}
+.card .v{font-size:22px;font-weight:650;font-variant-numeric:tabular-nums}
+.wrap{background:var(--card);border:1px solid var(--bd);border-radius:12px;overflow:auto}
+table{border-collapse:collapse;width:100%;min-width:900px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--bd);text-align:left;vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);background:var(--row);position:sticky;top:0}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:hover td{background:var(--row)}
+td small{display:block;color:var(--mut)}
+.in{color:var(--ok)} .out{color:var(--bad)}
+tfoot td{font-weight:650;background:var(--row)}
+.empty{padding:30px;text-align:center;color:var(--mut)}
+dialog{border:1px solid var(--bd);border-radius:14px;background:var(--card);color:var(--tx);padding:0;width:min(640px,94vw)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog form{padding:20px}
+dialog h2{margin:0 0 14px;font-size:18px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid .full{grid-column:1/-1}
+@media (max-width:560px){.grid{grid-template-columns:1fr}}
+.acts{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.seg{display:flex;gap:0}
+.seg label{flex:1;margin:0;text-align:center;border:1px solid var(--bd);padding:8px;cursor:pointer;color:var(--tx)}
+.seg label:first-child{border-radius:8px 0 0 8px}.seg label:last-child{border-radius:0 8px 8px 0}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{position:relative}
+.seg input:checked + span{font-weight:650}
+.seg label:has(input:checked){background:var(--pri);color:var(--pri-tx);border-color:var(--pri)}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:99}
+@media print{
+  header.top .no-print,.bar,.acts,td.acoes,th.acoes,.cards{display:none!important}
+  body{background:#fff;color:#000} .wrap{border:0} table{min-width:0;font-size:11px}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<section id="login" hidden>
+  <form class="box" id="fLogin">
+    <h1>Gestão da Banda</h1>
+    <p>Entre com o seu e-mail e palavra-passe.</p>
+    <div class="f"><label for="lEmail">E-mail</label><input id="lEmail" type="email" autocomplete="username" required></div>
+    <div class="f"><label for="lPass">Palavra-passe</label><input id="lPass" type="password" autocomplete="current-password" required></div>
+    <div class="err" id="lErr"></div>
+    <button class="btn pri" style="width:100%">Entrar</button>
+  </form>
+</section>
+
+<!-- APLICAÇÃO -->
+<section id="app" hidden>
+  <header class="top">
+    <h1 id="titulo">Diário de tesouraria</h1>
+    <span class="no-print" id="quem" style="color:var(--mut);font-size:13px"></span>
+    <button class="btn sm no-print" id="bSair">Sair</button>
+  </header>
+  <main>
+    <div class="bar">
+      <div><label for="fAno">Ano</label><select id="fAno"></select></div>
+      <div><label for="fMes">Mês</label><select id="fMes"></select></div>
+      <div class="grow"><label for="fTxt">Procurar</label><input id="fTxt" placeholder="descrição, sócio, motivo, atuação…"></div>
+      <button class="btn pri" id="bNovo">+ Novo movimento</button>
+      <button class="btn" id="bTransf">⇄ Transferência</button>
+      <button class="btn" id="bCsv">Exportar CSV</button>
+      <button class="btn" id="bPrint">Imprimir</button>
+    </div>
+    <div class="cards" id="cards"></div>
+    <div class="wrap"><table id="tab"></table></div>
+  </main>
+</section>
+
+<!-- MOVIMENTO -->
+<dialog id="dMov">
+  <form id="fMov" method="dialog">
+    <h2 id="mTit">Novo movimento</h2>
+    <div class="grid">
+      <div class="full seg">
+        <label><input type="radio" name="tipo" value="E" checked><span>Entrada (recebimento)</span></label>
+        <label><input type="radio" name="tipo" value="S"><span>Saída (pagamento)</span></label>
+      </div>
+      <div><label>Data</label><input name="data_mov" type="date" required></div>
+      <div><label>Valor (€)</label><input name="valor" inputmode="decimal" placeholder="0,00" required></div>
+      <div class="full"><label>Descrição</label><input name="descricao" required maxlength="200"></div>
+      <div><label>Conta</label><select name="id_conta" required></select></div>
+      <div><label>Categoria</label><select name="id_cat_mov"></select></div>
+      <div><label>Meio de pagamento</label><select name="id_meio"></select></div>
+      <div><label>Documento / n.º</label><input name="documento" maxlength="40"></div>
+      <div><label>Sócio</label><select name="id_socio"></select></div>
+      <div><label>ou Terceiro (não sócio)</label><input name="terceiro" maxlength="100"></div>
+      <div><label>Motivo (ex.: Alimentação, Transporte)</label><input name="motivo" list="lMotivos" maxlength="100"></div>
+      <div><label>Atuação</label><input name="atuacao" list="lAtuacoes" maxlength="150"></div>
+      <div class="full"><label>Notas</label><textarea name="notas" rows="2"></textarea></div>
+    </div>
+    <datalist id="lMotivos"></datalist><datalist id="lAtuacoes"></datalist>
+    <div class="err" id="mErr"></div>
+    <div class="acts">
+      <button type="button" class="btn" data-fechar="dMov">Cancelar</button>
+      <button class="btn pri">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- TRANSFERÊNCIA -->
+<dialog id="dTr">
+  <form id="fTr" method="dialog">
+    <h2>Transferência entre contas</h2>
+    <div class="grid">
+      <div><label>Data</label><input name="data_mov" type="date" required></div>
+      <div><label>Valor (€)</label><input name="valor" inputmode="decimal" placeholder="0,00" required></div>
+      <div><label>De (sai desta conta)</label><select name="de" required></select></div>
+      <div><label>Para (entra nesta conta)</label><select name="para" required></select></div>
+      <div class="full"><label>Descrição</label><input name="descricao" value="Transferência entre contas" required></div>
+    </div>
+    <div class="err" id="tErr"></div>
+    <div class="acts">
+      <button type="button" class="btn" data-fechar="dTr">Cancelar</button>
+      <button class="btn pri">Transferir</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+<script>
+"use strict";
+/* ============ LIGAÇÃO AO SUPABASE (chave pública; a segurança vem do login + RLS) ============ */
+const SUPABASE_URL = "https://fmsojfnjyzkzryhrusyo.supabase.co";
+const SUPABASE_KEY = "sb_publishable_WRILmPFsG7w_RtLIhX9AfQ_cx63tfUK";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* ============ UTILITÁRIOS ============ */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const eur = n => new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(n || 0);
+const dpt = iso => iso ? iso.split("-").reverse().join("/") : "";
+const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const hoje = () => new Date().toISOString().slice(0, 10);
+const nul = v => (v === "" || v == null) ? null : v;
+function parseValor(t) {
+  const s = String(t).trim().replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
+}
+function toast(msg) {
+  const d = document.createElement("div"); d.className = "toast"; d.textContent = msg;
+  document.body.appendChild(d); setTimeout(() => d.remove(), 2600);
+}
+function erroPT(e) {
+  const m = (e && e.message) || String(e);
+  if (/Invalid login/i.test(m)) return "E-mail ou palavra-passe incorretos.";
+  if (/Failed to fetch|NetworkError/i.test(m)) return "Sem ligação à internet ou ao servidor.";
+  return m;
+}
+async function lerTudo(tabela, ordenar) {           // lê todas as linhas (o Supabase devolve 1000 de cada vez)
+  const out = []; let de = 0;
+  for (;;) {
+    let q = sb.from(tabela).select("*");
+    for (const o of ordenar) q = q.order(o);
+    const { data, error } = await q.range(de, de + 999);
+    if (error) throw error;
+    out.push(...data);
+    if (data.length < 1000) break;
+    de += 1000;
+  }
+  return out;
+}
+
+/* ============ ESTADO ============ */
+const S = { contas: [], cats: [], meios: [], socios: [], movs: [], ano: new Date().getFullYear(), mes: 0, txt: "" };
+
+/* ============ SESSÃO ============ */
+async function arranque() {
+  const { data } = await sb.auth.getSession();
+  mostrar(data.session);
+  sb.auth.onAuthStateChange((_ev, sess) => mostrar(sess));
+}
+let jaCarregou = false;
+function mostrar(sess) {
+  $("#login").hidden = !!sess;
+  $("#app").hidden = !sess;
+  if (sess) {
+    $("#quem").textContent = sess.user.email;
+    if (!jaCarregou) { jaCarregou = true; carregar(); }
+  } else { jaCarregou = false; }
+}
+$("#fLogin").addEventListener("submit", async e => {
+  e.preventDefault(); $("#lErr").textContent = "";
+  const { error } = await sb.auth.signInWithPassword({ email: $("#lEmail").value.trim(), password: $("#lPass").value });
+  if (error) $("#lErr").textContent = erroPT(error);
+});
+$("#bSair").addEventListener("click", () => sb.auth.signOut());
+
+/* ============ DADOS ============ */
+async function carregar() {
+  try {
+    const [contas, cats, meios, socios, movs] = await Promise.all([
+      lerTudo("conta", ["id"]), lerTudo("categoria_mov", ["nome"]), lerTudo("meio_pagamento", ["id"]),
+      lerTudo("socio", ["nome"]), lerTudo("movimento", ["data_mov", "id"])
+    ]);
+    Object.assign(S, { contas, cats, meios, socios, movs });
+    calcularSaldos();
+    prepararFiltros();
+    desenhar();
+  } catch (e) { toast("Erro ao carregar: " + erroPT(e)); console.error(e); }
+}
+function calcularSaldos() {                          // saldo corrente de CADA conta, linha a linha
+  const acc = {}; S.contas.forEach(c => acc[c.id] = Number(c.saldo_inicial) || 0);
+  for (const m of S.movs) {
+    acc[m.id_conta] += (m.tipo === "S" ? -1 : 1) * Number(m.valor);
+    m._saldos = { ...acc };
+  }
+  S.saldoFinal = { ...acc };
+}
+function prepararFiltros() {
+  const anos = new Set([new Date().getFullYear()]);
+  S.movs.forEach(m => anos.add(Number(m.data_mov.slice(0, 4))));
+  const lista = [...anos].sort((a, b) => b - a);
+  if (!lista.includes(S.ano)) S.ano = lista[0];
+  $("#fAno").innerHTML = lista.map(a => `<option ${a === S.ano ? "selected" : ""}>${a}</option>`).join("");
+  $("#fMes").innerHTML = `<option value="0">Todo o ano</option>` +
+    MESES.map((m, i) => `<option value="${i + 1}" ${i + 1 === S.mes ? "selected" : ""}>${m}</option>`).join("");
+}
+const nomeConta = id => (S.contas.find(c => c.id === id) || {}).nome || "?";
+const nomeCat = id => (S.cats.find(c => c.id === id) || {}).nome || "";
+const nomeSocio = id => (S.socios.find(s => s.id === id) || {}).nome || "";
+
+/* ============ DIÁRIO ============ */
+function filtrados() {
+  const t = S.txt.trim().toLowerCase();
+  return S.movs.filter(m => {
+    if (Number(m.data_mov.slice(0, 4)) !== S.ano) return false;
+    if (S.mes && Number(m.data_mov.slice(5, 7)) !== S.mes) return false;
+    if (!t) return true;
+    return [m.descricao, nomeSocio(m.id_socio), m.terceiro, m.motivo, m.atuacao, m.documento, nomeCat(m.id_cat_mov)]
+      .some(x => (x || "").toLowerCase().includes(t));
+  });
+}
+function desenhar() {
+  // cartões de saldo atual por conta
+  $("#cards").innerHTML = S.contas.map(c =>
+    `<div class="card"><div class="k">Saldo — ${esc(c.nome)}</div><div class="v">${eur(S.saldoFinal[c.id])}</div></div>`).join("")
+    + `<div class="card"><div class="k">Saldo total</div><div class="v">${eur(Object.values(S.saldoFinal).reduce((a, b) => a + b, 0))}</div></div>`;
+
+  const rows = filtrados();
+  let tE = 0, tS = 0;
+  const cab = `<thead><tr><th>Nº</th><th>Data</th><th>Descrição</th><th>Categoria</th><th>Motivo / Atuação</th>
+    <th class="n">Entrada</th><th class="n">Saída</th><th>Conta</th>
+    ${S.contas.map(c => `<th class="n">Saldo ${esc(c.nome)}</th>`).join("")}<th class="acoes acoes"></th></tr></thead>`;
+  if (!rows.length) { $("#tab").innerHTML = cab + `<tbody><tr><td colspan="${9 + S.contas.length}" class="empty">Sem movimentos neste período.</td></tr></tbody>`; return; }
+
+  const corpo = rows.map(m => {
+    const v = Number(m.valor), transf = m.id_transf != null;
+    if (!transf) { if (m.tipo === "E") tE += v; else tS += v; }
+    const pessoa = nomeSocio(m.id_socio) || m.terceiro || "";
+    const ma = [m.motivo, m.atuacao].filter(Boolean).join(" · ");
+    return `<tr>
+      <td>${esc(m.num_lanc)}</td><td>${dpt(m.data_mov)}</td>
+      <td>${esc(m.descricao)}${pessoa ? `<small>${esc(pessoa)}</small>` : ""}</td>
+      <td>${esc(nomeCat(m.id_cat_mov))}</td><td>${esc(ma)}</td>
+      <td class="n in">${m.tipo === "E" ? eur(v) : ""}</td><td class="n out">${m.tipo === "S" ? eur(v) : ""}</td>
+      <td>${esc(nomeConta(m.id_conta))}</td>
+      ${S.contas.map(c => `<td class="n">${eur(m._saldos[c.id])}</td>`).join("")}
+      <td class="acoes" style="white-space:nowrap">
+        ${transf ? "" : `<button class="btn sm" data-ed="${m.id}">Editar</button> `}
+        <button class="btn sm bad" data-del="${m.id}">Apagar</button></td></tr>`;
+  }).join("");
+  $("#tab").innerHTML = cab + `<tbody>${corpo}</tbody>
+    <tfoot><tr><td colspan="5">Total do período (sem transferências)</td>
+    <td class="n in">${eur(tE)}</td><td class="n out">${eur(tS)}</td>
+    <td colspan="${2 + S.contas.length}">Resultado: ${eur(tE - tS)}</td></tr></tfoot>`;
+}
+$("#fAno").addEventListener("change", e => { S.ano = Number(e.target.value); desenhar(); });
+$("#fMes").addEventListener("change", e => { S.mes = Number(e.target.value); desenhar(); });
+$("#fTxt").addEventListener("input", e => { S.txt = e.target.value; desenhar(); });
+$("#bPrint").addEventListener("click", () => window.print());
+$("#bCsv").addEventListener("click", () => {
+  const cel = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const linhas = [["Nº","Data","Tipo","Descrição","Sócio/Terceiro","Categoria","Motivo","Atuação","Valor","Conta","Documento"].map(cel).join(";")];
+  for (const m of filtrados())
+    linhas.push([m.num_lanc, m.data_mov, m.tipo, m.descricao, nomeSocio(m.id_socio) || m.terceiro, nomeCat(m.id_cat_mov),
+      m.motivo, m.atuacao, String(m.valor).replace(".", ","), nomeConta(m.id_conta), m.documento].map(cel).join(";"));
+  const blob = new Blob(["﻿" + linhas.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `diario_${S.ano}${S.mes ? "_" + String(S.mes).padStart(2, "0") : ""}.csv`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
+
+/* ============ FORMULÁRIO DE MOVIMENTO ============ */
+const fMov = $("#fMov"); let editId = null;
+const opts = (arr, nomeFn, vazio) => (vazio ? `<option value="">${vazio}</option>` : "") +
+  arr.map(x => `<option value="${x.id}">${esc(nomeFn(x))}</option>`).join("");
+function catsDoTipo(tp) { return S.cats.filter(c => c.tipo === tp); }
+function refrescarCats(sel) {
+  const tp = fMov.elements.tipo.value;
+  fMov.elements.id_cat_mov.innerHTML = opts(catsDoTipo(tp), c => c.nome, "— categoria —");
+  if (sel) fMov.elements.id_cat_mov.value = sel;
+}
+fMov.querySelectorAll('input[name="tipo"]').forEach(r => r.addEventListener("change", () => refrescarCats()));
+function abrirMov(m) {
+  editId = m ? m.id : null; $("#mErr").textContent = "";
+  $("#mTit").textContent = m ? "Editar movimento" : "Novo movimento";
+  const f = fMov.elements;
+  f.id_conta.innerHTML = opts(S.contas, c => c.nome);
+  f.id_meio.innerHTML = opts(S.meios, x => x.nome, "—");
+  f.id_socio.innerHTML = opts(S.socios, s => (s.num_socio ? s.num_socio + " · " : "") + s.nome, "—");
+  $("#lMotivos").innerHTML = [...new Set(S.movs.map(x => x.motivo).filter(Boolean))].map(x => `<option value="${esc(x)}">`).join("");
+  $("#lAtuacoes").innerHTML = [...new Set(S.movs.map(x => x.atuacao).filter(Boolean))].map(x => `<option value="${esc(x)}">`).join("");
+  fMov.reset();
+  f.tipo.value = m ? m.tipo : "E";
+  refrescarCats(m && m.id_cat_mov);
+  f.data_mov.value = m ? m.data_mov : hoje();
+  f.valor.value = m ? String(m.valor).replace(".", ",") : "";
+  f.descricao.value = m ? m.descricao : "";
+  f.id_conta.value = m ? m.id_conta : (S.contas[0] || {}).id;
+  f.id_meio.value = m && m.id_meio ? m.id_meio : "";
+  f.id_socio.value = m && m.id_socio ? m.id_socio : "";
+  f.terceiro.value = (m && m.terceiro) || ""; f.documento.value = (m && m.documento) || "";
+  f.motivo.value = (m && m.motivo) || ""; f.atuacao.value = (m && m.atuacao) || ""; f.notas.value = (m && m.notas) || "";
+  $("#dMov").showModal();
+}
+$("#bNovo").addEventListener("click", () => abrirMov(null));
+fMov.addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = fMov.elements, valor = parseValor(f.valor.value);
+  if (!(valor > 0)) { $("#mErr").textContent = "Indique um valor maior que zero."; return; }
+  const p = {
+    data_mov: f.data_mov.value, tipo: f.tipo.value, descricao: f.descricao.value.trim(), valor,
+    id_conta: Number(f.id_conta.value), id_cat_mov: nul(f.id_cat_mov.value) && Number(f.id_cat_mov.value),
+    id_meio: nul(f.id_meio.value) && Number(f.id_meio.value), id_socio: nul(f.id_socio.value) && Number(f.id_socio.value),
+    terceiro: nul(f.terceiro.value.trim()), documento: nul(f.documento.value.trim()),
+    motivo: nul(f.motivo.value.trim()), atuacao: nul(f.atuacao.value.trim()), notas: nul(f.notas.value.trim())
+  };
+  if (p.id_socio) p.terceiro = null;
+  const r = editId ? await sb.from("movimento").update(p).eq("id", editId) : await sb.from("movimento").insert(p);
+  if (r.error) { $("#mErr").textContent = erroPT(r.error); return; }
+  $("#dMov").close(); toast("Movimento guardado."); await carregar();
+});
+
+/* ============ TRANSFERÊNCIA ============ */
+const fTr = $("#fTr");
+$("#bTransf").addEventListener("click", () => {
+  if (S.contas.length < 2) { toast("São precisas pelo menos 2 contas."); return; }
+  $("#tErr").textContent = ""; fTr.reset();
+  fTr.elements.de.innerHTML = opts(S.contas, c => c.nome);
+  fTr.elements.para.innerHTML = opts(S.contas, c => c.nome);
+  fTr.elements.para.value = S.contas[1].id;
+  fTr.elements.data_mov.value = hoje();
+  fTr.elements.descricao.value = "Transferência entre contas";
+  $("#dTr").showModal();
+});
+fTr.addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = fTr.elements, valor = parseValor(f.valor.value);
+  if (!(valor > 0)) { $("#tErr").textContent = "Indique um valor maior que zero."; return; }
+  if (f.de.value === f.para.value) { $("#tErr").textContent = "Escolha contas diferentes."; return; }
+  const cat = S.cats.find(c => c.tipo === "T");
+  const base = { data_mov: f.data_mov.value, descricao: f.descricao.value.trim(), valor, id_cat_mov: cat ? cat.id : null };
+  const ins = await sb.from("movimento").insert([
+    { ...base, tipo: "E", id_conta: Number(f.para.value) },
+    { ...base, tipo: "S", id_conta: Number(f.de.value) }
+  ]).select("id,tipo");
+  if (ins.error) { $("#tErr").textContent = erroPT(ins.error); return; }
+  const idE = ins.data.find(x => x.tipo === "E").id;
+  const up = await sb.from("movimento").update({ id_transf: idE }).in("id", ins.data.map(x => x.id));
+  if (up.error) { $("#tErr").textContent = erroPT(up.error); return; }
+  $("#dTr").close(); toast("Transferência registada."); await carregar();
+});
+
+/* ============ EDITAR / APAGAR (tabela) ============ */
+$("#tab").addEventListener("click", async e => {
+  const ed = e.target.closest("[data-ed]"), del = e.target.closest("[data-del]");
+  if (ed) { const m = S.movs.find(x => x.id === Number(ed.dataset.ed)); if (m) abrirMov(m); }
+  if (del) {
+    const m = S.movs.find(x => x.id === Number(del.dataset.del)); if (!m) return;
+    const aviso = m.id_transf != null ? "Esta é uma transferência: serão apagados os DOIS lançamentos.\n\n" : "";
+    if (!confirm(`${aviso}Apagar "${m.descricao}" (${eur(m.valor)}, ${dpt(m.data_mov)})?`)) return;
+    const q = sb.from("movimento").delete();
+    const r = m.id_transf != null ? await q.eq("id_transf", m.id_transf) : await q.eq("id", m.id);
+    if (r.error) { toast("Erro: " + erroPT(r.error)); return; }
+    toast("Apagado."); await carregar();
+  }
+});
+document.querySelectorAll("[data-fechar]").forEach(b => b.addEventListener("click", () => $("#" + b.dataset.fechar).close()));
+
+arranque();
+</script>
+</body>
+</html>

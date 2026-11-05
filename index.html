@@ -98,6 +98,30 @@ dialog h2{margin:0 0 14px;font-size:18px}
 .prev{background:var(--row);border-radius:8px;padding:10px 12px;margin-top:12px;min-height:42px}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:99;max-width:92vw}
 
+/* ---- relatórios ---- */
+#relOut .doc{border:1px solid var(--bd);border-radius:8px;overflow:auto}
+.doc table.dm{width:100%;font-size:11.5px}
+.doc table.dm td.n,.doc table.dm th.n{text-align:right;white-space:nowrap}
+.doc table.dm tfoot td{font-weight:700;background:#eee}
+.doc .resumo{margin:12px 0 0 auto;width:min(520px,100%)} .doc .resumo td{padding:3px 8px} .doc .resumo td:last-child{text-align:right;white-space:nowrap}
+.doc .assin{display:flex;gap:40px;justify-content:flex-end;margin-top:38px}
+.doc .assin div{width:230px;text-align:center;border-top:1px solid #000;padding-top:4px;font-size:12px}
+.da-grid{display:grid;grid-template-columns:1fr 8px 1fr;align-items:start;margin-top:6px}
+.da-grid .bar{background:#000;align-self:stretch}
+.da-t{border:1px solid #000;text-align:center;font-weight:700;padding:5px;font-size:15px}
+.da-h{border:1px solid #000;text-align:center;font-weight:700;padding:4px;margin-top:-1px}
+.da-c{border:1px solid #000;padding:3px 6px;margin-top:-1px}
+.da-l{display:flex;border:1px solid #000;margin-top:-1px}
+.da-l span{flex:1;padding:3px 6px} .da-l b{min-width:96px;text-align:right;font-weight:400;border-left:1px solid #000;padding:3px 6px}
+.da-l.tot{font-weight:700;margin-top:0} .da-l.tot b{font-weight:700}
+.da-g{display:grid;grid-template-columns:24% 1fr 96px;border:1px solid #000;margin-top:-1px}
+.da-g .gn{display:flex;align-items:center;justify-content:center;text-align:center;padding:3px;border-right:1px solid #000}
+.da-g .gs div{padding:3px 6px;font-size:12px} .da-g .gs div + div{border-top:1px solid #000}
+.da-g .gv{display:flex;align-items:center;justify-content:flex-end;padding:3px 6px;border-left:1px solid #000}
+.doc .tit{border:1px solid #000;text-align:center;font-weight:700;font-size:17px;padding:8px}
+.doc .res{width:70%;margin:14px auto 0} .doc .res td{padding:4px 8px} .doc .res td:last-child{text-align:center;width:120px}
+.doc .comp td,.doc .comp th{padding:6px 8px;text-align:left} .doc .comp th{width:30%;background:#f3f3f3}
+
 /* ---- impressão ---- */
 #printArea{display:none}
 .doc{color:#000;background:#fff;font:13px/1.5 Georgia,"Times New Roman",serif;padding:8mm}
@@ -137,6 +161,7 @@ dialog h2{margin:0 0 14px;font-size:18px}
       <button data-v="socios">Sócios</button>
       <button data-v="quotas">Quotas</button>
       <button data-v="recibos">Recibos</button>
+      <button data-v="relatorios">Relatórios</button>
       <button data-v="config">Dados</button>
     </nav>
     <span id="quem" style="color:var(--mut);font-size:13px"></span>
@@ -192,6 +217,21 @@ dialog h2{margin:0 0 14px;font-size:18px}
         <div class="grow"><label>Procurar</label><input id="fRTxt" placeholder="n.º do recibo ou sócio"></div>
       </div>
       <div class="wrap"><table id="tabR"></table></div>
+    </section>
+
+    <!-- RELATÓRIOS -->
+    <section id="v-relatorios" hidden>
+      <div class="bar">
+        <div><label>Relatório</label><select id="rTipo">
+          <option value="diario">Diário de tesouraria (mensal)</option>
+          <option value="anual">Demonstração de resultados (anual)</option>
+          <option value="socios">Demonstração de resultados P/ Sócios</option>
+          <option value="motivos">Despesas por motivo e atuação</option></select></div>
+        <div><label>Ano</label><select id="rAno"></select></div>
+        <div id="rMesBox"><label>Mês</label><select id="rMes"></select></div>
+        <button class="btn pri" id="bRelImp">Imprimir</button>
+      </div>
+      <div id="relOut"></div>
     </section>
 
     <!-- DADOS DA BANDA -->
@@ -463,10 +503,12 @@ function csv(nome, cab, linhas) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = nome; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
-function imprimir(html) {                           // imprime só este conteúdo
+function imprimir(html, paisagem) {                 // imprime só este conteúdo
   const pa = $("#printArea"); pa.innerHTML = `<div class="doc">${html}</div>`;
+  const st = document.createElement("style");
+  st.textContent = `@page{size:A4 ${paisagem ? "landscape" : "portrait"};margin:10mm}`; document.head.appendChild(st);
   document.body.classList.add("printing");
-  const fim = () => { document.body.classList.remove("printing"); pa.innerHTML = ""; window.removeEventListener("afterprint", fim); };
+  const fim = () => { document.body.classList.remove("printing"); pa.innerHTML = ""; st.remove(); window.removeEventListener("afterprint", fim); };
   window.addEventListener("afterprint", fim);
   setTimeout(() => window.print(), 60);
 }
@@ -511,7 +553,7 @@ function nifValido(s) {
 }
 
 /* ============ ESTADO ============ */
-const S = { view: "diario", contas: [], cats: [], meios: [], socios: [], movs: [], catsSocio: [], quotas: [], recibos: [], cfg: {},
+const S = { view: "diario", contas: [], cats: [], meios: [], socios: [], movs: [], catsSocio: [], quotas: [], recibos: [], demoCfg: [], cfg: {},
             ano: new Date().getFullYear(), mes: 0, txt: "", saldoFinal: {}, fotoCache: {} };
 const nomeConta = id => (S.contas.find(c => c.id === id) || {}).nome || "?";
 const nomeCat = id => (S.cats.find(c => c.id === id) || {}).nome || "";
@@ -545,12 +587,12 @@ $("#bSair").addEventListener("click", () => sb.auth.signOut());
 /* ============ DADOS ============ */
 async function carregar() {
   try {
-    const [contas, cats, meios, socios, movs, catsSocio, quotas, recibos, cfg] = await Promise.all([
+    const [contas, cats, meios, socios, movs, catsSocio, quotas, recibos, cfg, demoCfg] = await Promise.all([
       lerTudo("conta", ["id"]), lerTudo("categoria_mov", ["nome"]), lerTudo("meio_pagamento", ["id"]),
       lerTudo("socio", ["nome"]), lerTudo("movimento", ["data_mov", "id"]), lerTudo("categoria_socio", ["nome"]),
-      lerTudo("quota", ["id"]), lerTudo("recibo", ["id"]), lerTudo("config", ["id"])
+      lerTudo("quota", ["id"]), lerTudo("recibo", ["id"]), lerTudo("config", ["id"]), lerTudo("demo_cfg", ["id"])
     ]);
-    Object.assign(S, { contas, cats, meios, socios, movs, catsSocio, quotas, recibos, cfg: cfg[0] || {} });
+    Object.assign(S, { contas, cats, meios, socios, movs, catsSocio, quotas, recibos, demoCfg, cfg: cfg[0] || {} });
     calcularSaldos();
     desenharTudo();
   } catch (e) { toast("Erro ao carregar: " + erroPT(e)); console.error(e); }
@@ -569,7 +611,7 @@ function dividaDe(idSocio) {
 }
 
 /* ============ NAVEGAÇÃO ============ */
-const VISTAS = { diario: desenharDiario, socios: desenharSocios, quotas: desenharQuotas, recibos: desenharRecibos, config: desenharConfig };
+const VISTAS = { diario: desenharDiario, socios: desenharSocios, quotas: desenharQuotas, recibos: desenharRecibos, relatorios: desenharRelatorios, config: desenharConfig };
 function ir(v) {
   S.view = v;
   $$("nav button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
@@ -631,6 +673,7 @@ function desenharDiario() {
       ${S.contas.map(c => `<td class="n">${eur(m._saldos[c.id])}</td>`).join("")}
       <td class="acoes" style="white-space:nowrap">
         ${bloqueado ? "" : `<button class="btn sm" data-ed="${m.id}">Editar</button> `}
+        ${m.tipo === "S" && !transf ? `<button class="btn sm" data-comp="${m.id}">Comprovativo</button> ` : ""}
         ${m.id_recibo != null ? `<small>(recibo — anule em Recibos)</small>` : `<button class="btn sm bad" data-del="${m.id}">Apagar</button>`}</td></tr>`;
   }).join("");
   $("#tabD").innerHTML = cab + `<tbody>${corpo}</tbody>
@@ -725,7 +768,8 @@ fTr.addEventListener("submit", async e => {
   $("#dTr").close(); toast("Transferência registada."); await carregar();
 });
 $("#tabD").addEventListener("click", async e => {
-  const ed = e.target.closest("[data-ed]"), del = e.target.closest("[data-del]");
+  const ed = e.target.closest("[data-ed]"), del = e.target.closest("[data-del]"), cp = e.target.closest("[data-comp]");
+  if (cp) { const m = S.movs.find(x => x.id === Number(cp.dataset.comp)); if (m) mostrarDoc(comprovativoHTML(m)); }
   if (ed) { const m = S.movs.find(x => x.id === Number(ed.dataset.ed)); if (m) abrirMov(m); }
   if (del) {
     const m = S.movs.find(x => x.id === Number(del.dataset.del)); if (!m) return;
@@ -1096,14 +1140,17 @@ function reciboHTML(r) {
     <p>Pago por ${esc(nomeMeio(r.id_meio) || "—")}.</p>
     <div class="ass">${esc(cargo(c.tesoureiro, c.tesoureiro_genero, "Tesoureiro"))}${c.tesoureiro ? "<br>" + esc(c.tesoureiro) : ""}</div>`;
 }
-let reciboAtual = null;
-function verRecibo(id) {
-  const r = S.recibos.find(x => x.id === id); if (!r) { toast("Recibo não encontrado."); return; }
-  reciboAtual = r;
-  $("#reciboConteudo").innerHTML = `<div class="doc" style="border:1px solid var(--bd);border-radius:8px">${reciboHTML(r)}</div>`;
+let docAtual = null;
+function mostrarDoc(html) {
+  docAtual = html;
+  $("#reciboConteudo").innerHTML = `<div class="doc" style="border:1px solid var(--bd);border-radius:8px">${html}</div>`;
   $("#dRecibo").showModal();
 }
-$("#bReciboImp").addEventListener("click", () => { if (reciboAtual) imprimir(reciboHTML(reciboAtual)); });
+function verRecibo(id) {
+  const r = S.recibos.find(x => x.id === id); if (!r) { toast("Recibo não encontrado."); return; }
+  mostrarDoc(reciboHTML(r));
+}
+$("#bReciboImp").addEventListener("click", () => { if (docAtual) imprimir(docAtual); });
 
 /* ============ DADOS DA BANDA / LISTAS ============ */
 const LISTAS = [
@@ -1174,6 +1221,186 @@ $("#fGen").addEventListener("submit", async e => {
   if (r.error) { $("#gErr").textContent = erroPT(r.error); return; }
   $("#dGen").close(); toast("Guardado."); await carregar();
 });
+
+/* ============ RELATÓRIOS ============ */
+const nomeCurto = n => { const t = String(n || ""), p = t.indexOf("("); return (p > 1 ? t.slice(0, p) : t).trim(); };
+const soma = (arr, f) => arr.reduce((a, x) => a + f(x), 0);
+function cabBanda() {
+  const c = S.cfg || {}, morada = [c.morada, [c.cod_postal, c.localidade].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  return `<div class="cab"><h1>${esc(c.nome_banda)}</h1>${c.nif ? "NIF " + esc(c.nif) : ""}${morada ? " · " + esc(morada) : ""}</div>`;
+}
+function assinaturas(extra) {
+  const c = S.cfg || {};
+  return `<div class="assin">${extra || ""}
+    <div>${esc(cargo(c.tesoureiro, c.tesoureiro_genero, "Tesoureiro"))}<br>${esc(c.tesoureiro || "")}</div>
+    <div>${esc(cargo(c.presidente, c.presidente_genero, "Presidente"))}<br>${esc(c.presidente || "")}</div></div>`;
+}
+
+/* ---- Diário de tesouraria mensal ---- */
+function diarioMensalHTML(ano, mes) {
+  const mm = String(mes).padStart(2, "0"), d1 = `${ano}-${mm}-01`;
+  const prox = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, "0")}-01`;
+  const c1 = S.contas[0], idx = id => (c1 && id === c1.id) ? 1 : 2;
+  const n1 = nomeCurto(c1 && c1.nome) || "Caixa";
+  const n2 = S.contas.length === 2 ? nomeCurto(S.contas[1].nome) : (S.contas.length > 2 ? "Outras contas" : "Banco");
+  const ini = [0, 0, 0], rec = [0, 0, 0], pag = [0, 0, 0], tr = [0, 0, 0];
+  S.contas.forEach(c => { ini[idx(c.id)] += Number(c.saldo_inicial) || 0; });
+  for (const m of S.movs) if (m.data_mov < d1) ini[idx(m.id_conta)] += (m.tipo === "S" ? -1 : 1) * Number(m.valor);
+  const doMes = S.movs.filter(m => m.data_mov >= d1 && m.data_mov < prox);
+  for (const m of doMes) {
+    const i = idx(m.id_conta), v = Number(m.valor);
+    if (m.id_transf != null) tr[i] += (m.tipo === "E" ? v : -v);
+    else if (m.tipo === "E") rec[i] += v; else pag[i] += v;
+  }
+  let s1 = ini[1], s2 = ini[2];
+  const linhas = doMes.map(m => {
+    const i = idx(m.id_conta), v = Number(m.valor), sinal = m.tipo === "E" ? 1 : -1;
+    if (i === 1) s1 += sinal * v; else s2 += sinal * v;
+    const pessoa = nomeSocio(m.id_socio) || m.terceiro || "";
+    const cel = (col, tipo) => (i === col && m.tipo === tipo) ? eur(v) : "";
+    return `<tr><td>${esc(m.num_lanc)}</td><td>${dpt(m.data_mov)}</td><td>${esc(m.descricao)}${pessoa ? " — " + esc(pessoa) : ""}</td><td>${esc(nomeCat(m.id_cat_mov))}</td>
+      <td class="n">${cel(2, "E")}</td><td class="n">${cel(2, "S")}</td><td class="n">${cel(1, "E")}</td><td class="n">${cel(1, "S")}</td>
+      <td class="n">${eur(s1)}</td><td class="n">${eur(s2)}</td></tr>`;
+  }).join("");
+  const fim1 = ini[1] + rec[1] - pag[1] + tr[1], fim2 = ini[2] + rec[2] - pag[2] + tr[2];
+  const dAnt = (() => { const d = new Date(ano, mes - 1, 0); return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + d.getFullYear(); })();
+  const U = t => esc(t.toUpperCase());
+  return `${cabBanda()}
+    <h2 style="text-align:left;margin:4px 0 8px">Diário de tesouraria — ${MESES[mes - 1].toLowerCase()} de ${ano}</h2>
+    <table class="dm"><thead><tr><th>Nº</th><th>Data</th><th>Descrição</th><th>Categoria</th>
+      <th class="n">Entradas ${esc(n2)}</th><th class="n">Saídas ${esc(n2)}</th><th class="n">Entradas ${esc(n1)}</th><th class="n">Saídas ${esc(n1)}</th>
+      <th class="n">Saldo ${esc(n1)}</th><th class="n">Saldo ${esc(n2)}</th></tr></thead>
+    <tbody>${linhas || `<tr><td colspan="10" style="text-align:center">Sem movimentos neste mês.</td></tr>`}</tbody>
+    <tfoot><tr><td colspan="4">Totais do mês (sem transferências)</td><td class="n">${eur(rec[2])}</td><td class="n">${eur(pag[2])}</td><td class="n">${eur(rec[1])}</td><td class="n">${eur(pag[1])}</td><td></td><td></td></tr></tfoot></table>
+    <table class="resumo">
+      <tr><td>SALDO ${U(n2)} RECEBIDO EM ${dAnt}</td><td>${eur(ini[2])}</td></tr>
+      <tr><td>SALDO ${U(n1)} RECEBIDO EM ${dAnt}</td><td>${eur(ini[1])}</td></tr>
+      <tr><td>Exercício mensal ${U(n2)}</td><td>${eur(rec[2] - pag[2] + tr[2])}</td></tr>
+      <tr><td>Exercício mensal ${U(n1)}</td><td>${eur(rec[1] - pag[1] + tr[1])}</td></tr>
+      <tr><td>SALDO ACUMULADO ${U(n2)}</td><td>${eur(fim2)}</td></tr>
+      <tr><td>SALDO ACUMULADO ${U(n1)}</td><td>${eur(fim1)}</td></tr>
+      <tr><td><strong>Saldo Total</strong></td><td><strong>${eur(fim1 + fim2)}</strong></td></tr></table>
+    ${assinaturas()}`;
+}
+
+/* ---- Demonstração de resultados (rubricas dinâmicas a partir das categorias) ---- */
+const cfgDA = (tp, chave, campo) => { const r = S.demoCfg.find(x => x.tipo === tp && x.chave === chave); return r ? (r[campo] || "") : ""; };
+function blocosDA(tp, d1, d2) {
+  const cats = S.cats.filter(c => c.tipo === tp).sort((a, b) => a.id - b.id);
+  const noPeriodo = m => m.data_mov >= d1 && m.data_mov < d2;
+  const itens = cats.map(c => ({ nm: c.nome, v: soma(S.movs.filter(m => m.id_cat_mov === c.id && m.tipo === tp && noPeriodo(m)), m => Number(m.valor)) }));
+  const extra = soma(S.movs.filter(m => m.id_cat_mov == null && m.tipo === tp && m.id_transf == null && noPeriodo(m)), m => Number(m.valor));
+  if (extra !== 0) itens.push({ nm: "Outras (não classificadas)", v: extra });
+  itens.forEach(i => { const p = i.nm.indexOf(" - "); i.g = p > 0 ? i.nm.slice(0, p).trim() : i.nm; i.it = p > 0 ? i.nm.slice(p + 3).trim() : i.nm; });
+  const blocos = [], feito = new Set(), cabsFeitos = new Set();
+  let tot = 0;
+  itens.forEach((i, k) => {
+    tot += i.v;
+    if (feito.has(k)) return;
+    const grupo = itens.map((x, j) => ({ x, j })).filter(o => o.x.g === i.g), cnt = grupo.length;
+    const chave = cnt > 1 ? i.g : i.nm, cab = cfgDA(tp, chave, "cab_antes");
+    if (cab && !cabsFeitos.has(cab)) { cabsFeitos.add(cab); blocos.push({ k: "H", t: cab }); }
+    if (cnt > 1) {
+      if (cfgDA(tp, i.g, "modo") === "Itens") {
+        blocos.push({ k: "C", t: i.g });
+        grupo.forEach(o => { blocos.push({ k: "L", t: o.x.it, v: o.x.v }); feito.add(o.j); });
+      } else {
+        blocos.push({ k: "G", t: i.g, v: soma(grupo, o => o.x.v), subs: grupo.map(o => o.x.it) });
+        grupo.forEach(o => feito.add(o.j));
+      }
+    } else { blocos.push({ k: "L", t: i.nm, v: i.v }); feito.add(k); }
+  });
+  return { blocos, tot };
+}
+function colDA(blocos) {
+  return blocos.map(b => b.k === "H" ? `<div class="da-h">${esc(b.t)}</div>`
+    : b.k === "C" ? `<div class="da-c">${esc(b.t)}</div>`
+    : b.k === "L" ? `<div class="da-l"><span>${esc(b.t)}</span><b>${eur(b.v)}</b></div>`
+    : `<div class="da-g"><div class="gn">${esc(b.t)}</div><div class="gs">${b.subs.map(t => `<div>${esc(t)}</div>`).join("")}</div><div class="gv">${eur(b.v)}</div></div>`).join("");
+}
+function saldosAte(ate) {
+  let banco = 0, caixa = 0;
+  S.contas.forEach((c, i) => {
+    let v = Number(c.saldo_inicial) || 0;
+    S.movs.forEach(m => { if (m.id_conta === c.id && m.data_mov < ate) v += (m.tipo === "S" ? -1 : 1) * Number(m.valor); });
+    if (i === 0) caixa += v; else banco += v;
+  });
+  return { banco, caixa };
+}
+function demoHTML(ano, socios) {
+  const d1 = `${ano}-01-01`, d2 = `${ano + 1}-01-01`;
+  const E = blocosDA("E", d1, d2), D = blocosDA("S", d1, d2);
+  const tit = `Demonstração de resultados ${ano}` + (S.cfg.nome_banda ? " - " + S.cfg.nome_banda : "");
+  const linhaRes = (t, v, neg) => `<tr><td style="text-align:right">${neg ? "<strong>" + t + "</strong>" : t}</td><td>${neg ? "<strong>" + eur(v) + "</strong>" : eur(v)}</td></tr>`;
+  let topo = "", fimSoc = "";
+  if (socios) {
+    const a = saldosAte(d1), b = saldosAte(d2);
+    topo = `<table class="res">${linhaRes("Saldo bancário do ano anterior", a.banco)}${linhaRes("Saldo fundo de maneio do ano anterior", a.caixa)}</table>`;
+    fimSoc = linhaRes("Saldo Bancário actual", b.banco) + linhaRes("Saldo fundo de maneio actual", b.caixa) + linhaRes("Saldo total actual", b.banco + b.caixa, true);
+  }
+  return `<div class="tit">${esc(tit)}</div>${topo}
+    <div class="da-grid" style="margin-top:10px">
+      <div class="da-t">Receitas</div><i></i><div class="da-t">Despesas</div>
+      <div>${colDA(E.blocos)}</div><i class="bar"></i><div>${colDA(D.blocos)}</div>
+      <div class="da-l tot"><span>Total</span><b>${eur(E.tot)}</b></div><i></i><div class="da-l tot"><span>Total</span><b>${eur(D.tot)}</b></div>
+    </div>
+    <div class="tit" style="margin-top:16px;font-size:15px">Resumo do ano</div>
+    <table class="res">${linhaRes("Total de Receitas", E.tot)}${linhaRes("Total de Despesas", D.tot)}${linhaRes("Saldo do Exercício", E.tot - D.tot, true)}${fimSoc}</table>
+    ${assinaturas()}`;
+}
+
+/* ---- Despesas por motivo e por atuação ---- */
+function motivosHTML(ano) {
+  const rows = S.movs.filter(m => m.tipo === "S" && m.id_transf == null && Number(m.data_mov.slice(0, 4)) === ano);
+  const agrupar = campo => {
+    const mp = new Map();
+    rows.forEach(m => { const k = m[campo] || "(sem " + (campo === "motivo" ? "motivo" : "atuação") + ")"; const o = mp.get(k) || { t: 0, n: 0 }; o.t += Number(m.valor); o.n++; mp.set(k, o); });
+    return [...mp.entries()].sort((a, b) => b[1].t - a[1].t);
+  };
+  const tab = (titulo, lista) => `<h2 style="text-align:left">${titulo}</h2><table class="dm"><thead><tr><th>${titulo.split(" ").pop()}</th><th class="n">Lançamentos</th><th class="n">Total</th></tr></thead><tbody>
+    ${lista.map(([k, o]) => `<tr><td>${esc(k)}</td><td class="n">${o.n}</td><td class="n">${eur(o.t)}</td></tr>`).join("") || `<tr><td colspan="3">Sem despesas neste ano.</td></tr>`}</tbody>
+    <tfoot><tr><td>Total</td><td class="n">${soma(lista, ([, o]) => o.n)}</td><td class="n">${eur(soma(lista, ([, o]) => o.t))}</td></tr></tfoot></table>`;
+  const comAt = agrupar("atuacao").filter(([k]) => !k.startsWith("(sem"));
+  return `${cabBanda()}<h2 style="text-align:left;margin:4px 0">Despesas de ${ano}</h2>${tab("Despesas por motivo", agrupar("motivo"))}
+    ${comAt.length ? tab("Despesas por atuação", comAt) : ""}`;
+}
+
+/* ---- Comprovativo de pagamento (saídas) ---- */
+function comprovativoHTML(m) {
+  const c = S.cfg || {}, benef = m.terceiro || nomeSocio(m.id_socio) || "";
+  const lin = (k, v) => `<tr><th>${k}</th><td>${v ? esc(v) : "&nbsp;"}</td></tr>`;
+  return `${cabBanda()}
+    <h2>COMPROVATIVO DE PAGAMENTO — N.º ${esc(m.num_lanc)}</h2>
+    <table class="comp">
+      ${lin("Data do pagamento", dpt(m.data_mov))}${lin("Meio de pagamento", nomeMeio(m.id_meio))}${lin("Conta", nomeConta(m.id_conta))}
+      ${lin("Beneficiário (quem recebe)", benef)}${lin("NIF do beneficiário", "")}${lin("N.º do documento", m.documento)}
+      ${lin("Categoria", nomeCat(m.id_cat_mov))}${lin("Motivo do pagamento", m.motivo)}${lin("Atuação / evento", m.atuacao)}
+      ${lin("Descrição / observações", m.descricao + (m.notas ? " — " + m.notas : ""))}
+      <tr><th>Valor</th><td><strong>${eur(m.valor)}</strong> (${esc(extenso(Number(m.valor)))})</td></tr></table>
+    <p>Declaro que recebi de ${esc(c.nome_banda)} a quantia de ${eur(m.valor)} referente ao pagamento acima indicado.</p>
+    <p>${esc(c.localidade || "")}${c.localidade ? ", " : ""}${dpt(m.data_mov)}</p>
+    ${assinaturas(`<div>O beneficiário<br>${esc(benef)}</div>`)}`;
+}
+
+/* ---- ecrã de relatórios ---- */
+function desenharRelatorios() {
+  const anos = anosDe(S.movs.map(m => m.data_mov)), selA = $("#rAno"), antA = selA.value;
+  selA.innerHTML = anos.map(a => `<option>${a}</option>`).join(""); if (antA) selA.value = antA;
+  const selM = $("#rMes"), antM = selM.value;
+  selM.innerHTML = MESES.map((m, i) => `<option value="${i + 1}">${m}</option>`).join("");
+  selM.value = antM || String(new Date().getMonth() + 1);
+  renderRelatorio();
+}
+let relAtual = { html: "", paisagem: false };
+function renderRelatorio() {
+  const t = $("#rTipo").value, ano = Number($("#rAno").value), mes = Number($("#rMes").value);
+  $("#rMesBox").hidden = t !== "diario";
+  const html = t === "diario" ? diarioMensalHTML(ano, mes) : t === "anual" ? demoHTML(ano, false) : t === "socios" ? demoHTML(ano, true) : motivosHTML(ano);
+  relAtual = { html, paisagem: t === "diario" };
+  $("#relOut").innerHTML = `<div class="doc">${html}</div>`;
+}
+["rTipo", "rAno", "rMes"].forEach(i => $("#" + i).addEventListener("change", renderRelatorio));
+$("#bRelImp").addEventListener("click", () => imprimir(relAtual.html, relAtual.paisagem));
 
 arranque();
 </script>
